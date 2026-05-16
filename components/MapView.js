@@ -34,54 +34,117 @@ export default function MapView() {
     const renderer = L.canvas({ padding: 0.5 });
     const UNNAMED = "Unnamed nature reserve";
 
-    const cluster = L.markerClusterGroup({
-      chunkedLoading: true,
-      maxClusterRadius: 55,
-      iconCreateFunction: (c) => {
-        const n = c.getChildCount();
-        const size = n < 100 ? 36 : n < 1000 ? 44 : 54;
-        return L.divIcon({
-          html: `<div style="background:${CLUSTER_COLOR};color:#fff;width:${size}px;height:${size}px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:3px solid rgba(255,255,255,.8)">${n}</div>`,
-          className: "",
-          iconSize: [size, size],
-        });
-      },
-    });
-
     const popup = L.popup();
-    // One delegated handler instead of binding a popup to every marker.
-    cluster.on("click", (e) => {
-      const p = e.layer && e.layer.feature && e.layer.feature.properties;
-      if (!p) return;
-      const name = p.name || UNNAMED;
-      const site = p.website
-        ? `<br/><a href="${p.website}" target="_blank" rel="noreferrer">Website</a>`
-        : "";
-      popup.setLatLng(e.latlng).setContent(`<strong>${name}</strong>${site}`).openOn(map);
-    });
+
+    function makeCluster() {
+      const cl = L.markerClusterGroup({
+        chunkedLoading: true,
+        maxClusterRadius: 55,
+        iconCreateFunction: (c) => {
+          const n = c.getChildCount();
+          const size = n < 100 ? 36 : n < 1000 ? 44 : 54;
+          return L.divIcon({
+            html: `<div style="background:${CLUSTER_COLOR};color:#fff;width:${size}px;height:${size}px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:3px solid rgba(255,255,255,.8)">${n}</div>`,
+            className: "",
+            iconSize: [size, size],
+          });
+        },
+      });
+      // One delegated handler instead of binding a popup to every marker.
+      cl.on("click", (e) => {
+        const p = e.layer && e.layer.feature && e.layer.feature.properties;
+        if (!p) return;
+        const name = p.name || UNNAMED;
+        const site = p.website
+          ? `<br/><a href="${p.website}" target="_blank" rel="noreferrer">Website</a>`
+          : "";
+        popup.setLatLng(e.latlng).setContent(`<strong>${name}</strong>${site}`).openOn(map);
+      });
+      return cl;
+    }
+
+    const mkMarker = (f) => {
+      const c = f.geometry.coordinates;
+      const m = L.circleMarker([c[1], c[0]], {
+        renderer,
+        radius: 5,
+        weight: 1,
+        color: "#ffffff",
+        fillColor: CLUSTER_COLOR,
+        fillOpacity: 0.85,
+      });
+      m.feature = f;
+      return m;
+    };
+
+    const namedCluster = makeCluster();
+    const unnamedCluster = makeCluster();
+    const NOUN = "nature reserves";
 
     fetch("data/points.geojson")
       .then((r) => r.json())
       .then((geo) => {
         const feats = geo.features || [];
-        const markers = new Array(feats.length);
+        const namedMarkers = [];
+        const unnamedFeats = [];
         for (let i = 0; i < feats.length; i++) {
-          const c = feats[i].geometry.coordinates;
-          const m = L.circleMarker([c[1], c[0]], {
-            renderer,
-            radius: 5,
-            weight: 1,
-            color: "#ffffff",
-            fillColor: CLUSTER_COLOR,
-            fillOpacity: 0.85,
-          });
-          m.feature = feats[i];
-          markers[i] = m;
+          if (feats[i].properties && feats[i].properties.name)
+            namedMarkers.push(mkMarker(feats[i]));
+          else unnamedFeats.push(feats[i]);
         }
-        cluster.addLayers(markers);
-        map.addLayer(cluster);
+        namedCluster.addLayers(namedMarkers);
+        map.addLayer(namedCluster);
+
         const el = document.getElementById("point-count");
-        if (el) el.textContent = `${feats.length.toLocaleString()} nature reserves mapped`;
+        let shown = false;
+        let built = false;
+        const setCount = () => {
+          if (!el) return;
+          el.textContent = shown
+            ? `${(namedMarkers.length + unnamedFeats.length).toLocaleString()} ${NOUN} mapped`
+            : `${namedMarkers.length.toLocaleString()} named ${NOUN}`;
+        };
+        setCount();
+
+        if (unnamedFeats.length) {
+          const Toggle = L.Control.extend({
+            onAdd: function () {
+              const b = L.DomUtil.create("button", "toggle-unnamed");
+              const label = () => {
+                b.textContent = shown
+                  ? "Hide unnamed"
+                  : `Show ${unnamedFeats.length.toLocaleString()} unnamed`;
+              };
+              label();
+              L.DomEvent.disableClickPropagation(b);
+              b.addEventListener("click", () => {
+                if (!shown) {
+                  if (!built) {
+                    b.textContent = "Loading…";
+                    setTimeout(() => {
+                      unnamedCluster.addLayers(unnamedFeats.map(mkMarker));
+                      built = true;
+                      map.addLayer(unnamedCluster);
+                      shown = true;
+                      label();
+                      setCount();
+                    }, 10);
+                    return;
+                  }
+                  map.addLayer(unnamedCluster);
+                  shown = true;
+                } else {
+                  map.removeLayer(unnamedCluster);
+                  shown = false;
+                }
+                label();
+                setCount();
+              });
+              return b;
+            },
+          });
+          map.addControl(new Toggle({ position: "topright" }));
+        }
       })
       .catch(() => {
         const el = document.getElementById("point-count");
