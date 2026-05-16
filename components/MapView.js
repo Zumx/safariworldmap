@@ -7,7 +7,6 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
-const EMOJI = "🦁";
 const CLUSTER_COLOR = "#b8860b";
 
 export default function MapView() {
@@ -21,6 +20,7 @@ export default function MapView() {
       center: [25, 10],
       zoom: 3,
       worldCopyJump: true,
+      preferCanvas: true,
     });
     mapRef.current = map;
 
@@ -29,13 +29,10 @@ export default function MapView() {
       attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
 
-    const icon = L.divIcon({
-      html: `<div class="marker-pin">${EMOJI}</div>`,
-      className: "",
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-      popupAnchor: [0, -12],
-    });
+    // Canvas renderer + circle markers scale to hundreds of thousands of
+    // points where one DOM/divIcon per marker would freeze the browser.
+    const renderer = L.canvas({ padding: 0.5 });
+    const UNNAMED = "Unnamed nature reserve";
 
     const cluster = L.markerClusterGroup({
       chunkedLoading: true,
@@ -51,20 +48,36 @@ export default function MapView() {
       },
     });
 
+    const popup = L.popup();
+    // One delegated handler instead of binding a popup to every marker.
+    cluster.on("click", (e) => {
+      const p = e.layer && e.layer.feature && e.layer.feature.properties;
+      if (!p) return;
+      const name = p.name || UNNAMED;
+      const site = p.website
+        ? `<br/><a href="${p.website}" target="_blank" rel="noreferrer">Website</a>`
+        : "";
+      popup.setLatLng(e.latlng).setContent(`<strong>${name}</strong>${site}`).openOn(map);
+    });
+
     fetch("data/points.geojson")
       .then((r) => r.json())
       .then((geo) => {
         const feats = geo.features || [];
-        const markers = feats.map((f) => {
-          const [lon, lat] = f.geometry.coordinates;
-          const name = f.properties.name || "Unnamed nature reserve";
-          const site = f.properties.website
-            ? `<br/><a href="${f.properties.website}" target="_blank" rel="noreferrer">Website</a>`
-            : "";
-          return L.marker([lat, lon], { icon }).bindPopup(
-            `<strong>${name}</strong>${site}`
-          );
-        });
+        const markers = new Array(feats.length);
+        for (let i = 0; i < feats.length; i++) {
+          const c = feats[i].geometry.coordinates;
+          const m = L.circleMarker([c[1], c[0]], {
+            renderer,
+            radius: 5,
+            weight: 1,
+            color: "#ffffff",
+            fillColor: CLUSTER_COLOR,
+            fillOpacity: 0.85,
+          });
+          m.feature = feats[i];
+          markers[i] = m;
+        }
         cluster.addLayers(markers);
         map.addLayer(cluster);
         const el = document.getElementById("point-count");
@@ -75,10 +88,7 @@ export default function MapView() {
         if (el) el.textContent = "Could not load data";
       });
 
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
+    return () => { map.remove(); mapRef.current = null; };
   }, []);
 
   return <div ref={ref} style={{ width: "100%", height: "100%" }} />;

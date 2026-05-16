@@ -1,15 +1,12 @@
 // Tiled Overpass fetcher -> public/data/points.geojson
-// Splits the world into tiles to avoid Overpass timeouts.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// ---- Per-site query config ----
 const OSM_KEY = "leisure";
 const OSM_VALUE = "nature_reserve";
-// --------------------------------
 
 const ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
@@ -18,20 +15,15 @@ const ENDPOINTS = [
   "https://overpass.private.coffee/api/interpreter",
 ];
 
-// overpass-api.de returns HTTP 406 to clients with no User-Agent (Node fetch
-// sends none by default), so a UA header is mandatory.
+// overpass-api.de returns HTTP 406 to clients with no User-Agent.
 const HEADERS = {
   "Content-Type": "application/x-www-form-urlencoded",
   "User-Agent": "worldmap-osm-map/1.0 (zumxet@gmail.com)",
   Accept: "application/json",
 };
 
-const TILE = 30; // degrees
-const LAT_MIN = -60,
-  LAT_MAX = 78,
-  LON_MIN = -180,
-  LON_MAX = 180;
-
+const TILE = 30;
+const LAT_MIN = -60, LAT_MAX = 78, LON_MIN = -180, LON_MAX = 180;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function buildQuery(s, w, n, e) {
@@ -48,11 +40,7 @@ async function fetchTile(s, w, n, e) {
   for (let attempt = 0; attempt < 6; attempt++) {
     const endpoint = ENDPOINTS[attempt % ENDPOINTS.length];
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: HEADERS,
-        body,
-      });
+      const res = await fetch(endpoint, { method: "POST", headers: HEADERS, body });
       if (res.status === 429 || res.status === 504 || res.status === 502) {
         await sleep(8000 + attempt * 4000);
         continue;
