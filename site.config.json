@@ -1,0 +1,40 @@
+{
+  "name": "Safari World Map",
+  "slug": "safariworldmap",
+  "emoji": "🦁",
+  "domain": "safariworldmap.vercel.app",
+  "colors": {
+    "primary": "#b8860b",
+    "accent": "#e3c16f"
+  },
+  "osm": {
+    "key": "leisure",
+    "value": "nature_reserve"
+  },
+  "osmFilters": [
+    {
+      "key": "leisure",
+      "value": "nature_reserve"
+    }
+  ],
+  "includeRelations": false,
+  "dedupeMeters": 0,
+  "mappedNoun": "nature reserves",
+  "unnamedLabel": "Unnamed nature reserve",
+  "affiliateUrl": "https://www.getyourguide.com/s/?q={q}",
+  "metaFields": [],
+  "aboutText": null,
+  "locales": [
+    "en"
+  ],
+  "defaultLocale": "en",
+  "namedOnly": false,
+  "includeFilter": null,
+  "dataSource": {
+    "type": "overpass"
+  },
+  "googlePlaces": {
+    "enabled": false,
+    "cap": 800
+  }
+}

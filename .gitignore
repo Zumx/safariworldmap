@@ -5,4 +5,6 @@
 *.log
 .vercel
 .env*.local
+.env
 fetch.log
+scripts/.cache

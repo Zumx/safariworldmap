@@ -1,8 +1,9 @@
+// Reads MDX blog posts from src/content/blog at build time.
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import matter from "gray-matter";
 
-const DIR = join(process.cwd(), "content", "blog");
+const DIR = join(process.cwd(), "src", "content", "blog");
 
 export async function listPosts() {
   let files = [];
@@ -19,7 +20,7 @@ export async function listPosts() {
         slug: file.replace(/\.mdx$/, ""),
         title: data.title || file,
         date: data.date || "",
-        description: data.description || data.excerpt || "",
+        excerpt: data.excerpt || "",
       };
     })
   );
