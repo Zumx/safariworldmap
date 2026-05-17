@@ -8,6 +8,8 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 const CLUSTER_COLOR = "#b8860b";
+const UNNAMED = "Unnamed nature reserve";
+const NOUN = "nature reserves";
 
 export default function MapView() {
   const ref = useRef(null);
@@ -31,15 +33,22 @@ export default function MapView() {
 
     // Canvas renderer + circle markers scale to hundreds of thousands of
     // points where one DOM/divIcon per marker would freeze the browser.
-    const renderer = L.canvas({ padding: 0.5 });
-    const UNNAMED = "Unnamed nature reserve";
-
+    // tolerance:12 — default 0 forces an exact ~5px center hit, which on a
+    // clustered world map is effectively impossible (the real "unclickable" bug).
+    const renderer = L.canvas({ padding: 0.5, tolerance: 12 });
     const popup = L.popup();
 
     function makeCluster() {
       const cl = L.markerClusterGroup({
         chunkedLoading: true,
         maxClusterRadius: 55,
+        // Stop clustering once zoomed in so individual points render as
+        // discrete, clickable circle markers instead of permanent clusters.
+        disableClusteringAtZoom: 10,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true,
+        removeOutsideVisibleBounds: true,
         iconCreateFunction: (c) => {
           const n = c.getChildCount();
           const size = n < 100 ? 36 : n < 1000 ? 44 : 54;
@@ -60,6 +69,12 @@ export default function MapView() {
           : "";
         popup.setLatLng(e.latlng).setContent(`<strong>${name}</strong>${site}`).openOn(map);
       });
+      cl.on("mouseover", (e) => {
+        if (e.layer && e.layer.feature) map.getContainer().style.cursor = "pointer";
+      });
+      cl.on("mouseout", () => {
+        map.getContainer().style.cursor = "";
+      });
       return cl;
     }
 
@@ -67,11 +82,12 @@ export default function MapView() {
       const c = f.geometry.coordinates;
       const m = L.circleMarker([c[1], c[0]], {
         renderer,
-        radius: 5,
-        weight: 1,
+        radius: 6,
+        weight: 2,
         color: "#ffffff",
         fillColor: CLUSTER_COLOR,
         fillOpacity: 0.85,
+        bubblingMouseEvents: false,
       });
       m.feature = f;
       return m;
@@ -79,7 +95,6 @@ export default function MapView() {
 
     const namedCluster = makeCluster();
     const unnamedCluster = makeCluster();
-    const NOUN = "nature reserves";
 
     fetch("data/points.geojson")
       .then((r) => r.json())
